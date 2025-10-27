@@ -1354,6 +1354,105 @@ class ToolUpdate(BaseModelWithConfigDict):
         return v
 
 
+class OpenAPIImportRequest(BaseModel):
+    """Request schema for importing tools from OpenAPI specification.
+
+    Attributes:
+        url: URL to fetch OpenAPI YAML specification from
+        content: Direct YAML content as string
+        namespace: Optional prefix for all tool names
+        team_id: Team ID to assign imported tools to
+        visibility: Visibility level for imported tools (private, team, public)
+
+    Examples:
+        >>> from mcpgateway.schemas import OpenAPIImportRequest
+        >>> # Import from URL
+        >>> req = OpenAPIImportRequest(url="https://example.com/openapi.yaml")
+        >>> req.url
+        'https://example.com/openapi.yaml'
+
+        >>> # Import from content
+        >>> req = OpenAPIImportRequest(content="openapi: 3.0.0\\npaths: {}")
+        >>> req.content is not None
+        True
+
+        >>> # Error: both provided
+        >>> try:
+        ...     OpenAPIImportRequest(url="http://example.com", content="test")
+        ... except ValueError as e:
+        ...     "not both" in str(e)
+        True
+
+        >>> # Error: neither provided
+        >>> try:
+        ...     OpenAPIImportRequest()
+        ... except ValueError as e:
+        ...     "must be provided" in str(e)
+        True
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    url: Optional[str] = Field(None, description="URL to OpenAPI YAML specification")
+    content: Optional[str] = Field(None, description="Direct YAML content")
+    namespace: Optional[str] = Field(None, description="Optional prefix for tool names")
+    team_id: Optional[str] = Field(None, description="Team ID to assign tools to")
+    visibility: Optional[str] = Field("public", description="Tool visibility: private, team, public")
+
+    @model_validator(mode="after")
+    def validate_url_or_content(self) -> Self:
+        """Validate that exactly one of url or content is provided.
+
+        Returns:
+            Self: Validated instance
+
+        Raises:
+            ValueError: If both or neither url and content are provided
+        """
+        if not self.url and not self.content:
+            raise ValueError("Either 'url' or 'content' must be provided")
+        if self.url and self.content:
+            raise ValueError("Provide either 'url' or 'content', not both")
+        return self
+
+
+class OpenAPIImportResponse(BaseModel):
+    """Response schema for OpenAPI import operation.
+
+    Attributes:
+        success: Whether import operation succeeded
+        message: Human-readable message describing the result
+        created_count: Number of tools successfully created
+        failed_count: Number of tools that failed to create
+        tools: List of successfully created tool details
+        errors: List of errors encountered during import
+
+    Examples:
+        >>> from mcpgateway.schemas import OpenAPIImportResponse
+        >>> response = OpenAPIImportResponse(
+        ...     success=True,
+        ...     message="Imported 3 tools",
+        ...     created_count=3,
+        ...     failed_count=0,
+        ...     tools=[{"name": "get_users", "url": "https://api.example.com/users"}],
+        ...     errors=[]
+        ... )
+        >>> response.success
+        True
+        >>> response.created_count
+        3
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    success: bool = Field(..., description="Whether the import operation succeeded")
+    message: str = Field(..., description="Human-readable message describing the result")
+    created_count: int = Field(..., description="Number of tools successfully created")
+    failed_count: int = Field(..., description="Number of tools that failed to create")
+    tools: List[Dict[str, Any]] = Field(default_factory=list, description="List of successfully created tool details")
+    errors: List[Dict[str, str]] = Field(default_factory=list, description="List of errors encountered")
+
+
 class ToolRead(BaseModelWithConfigDict):
     """Schema for reading tool information.
 

@@ -81,6 +81,8 @@ from mcpgateway.schemas import (
     GatewayRead,
     GatewayUpdate,
     JsonPathModifier,
+    OpenAPIImportRequest,
+    OpenAPIImportResponse,
     PromptCreate,
     PromptExecuteArgs,
     PromptRead,
@@ -117,6 +119,7 @@ from mcpgateway.transports.streamablehttp_transport import SessionManagerWrapper
 from mcpgateway.utils.db_isready import wait_for_db_ready
 from mcpgateway.utils.error_formatter import ErrorFormatter
 from mcpgateway.utils.metadata_capture import MetadataCapture
+from mcpgateway.utils.openapi_parser import convert_openapi_to_tools, extract_base_url, extract_security_config, parse_openapi_spec
 from mcpgateway.utils.orjson_response import ORJSONResponse
 from mcpgateway.utils.passthrough_headers import set_global_passthrough_headers
 from mcpgateway.utils.redis_isready import wait_for_redis_ready
@@ -2229,6 +2232,116 @@ async def create_tool(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ex))
         logger.error(f"Unexpected error while creating tool: {ex}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while creating the tool")
+
+
+@tool_router.post("/openapi", response_model=OpenAPIImportResponse)
+@tool_router.post("/openapi/", response_model=OpenAPIImportResponse)
+@require_permission("tools.create")
+async def import_tools_from_openapi(
+    import_request: OpenAPIImportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user_with_permissions),
+) -> OpenAPIImportResponse:
+    """
+    Import multiple REST API tools from an OpenAPI specification.
+
+    Parses OpenAPI YAML (from URL or direct content), extracts all endpoints,
+    and registers them as individual REST tools with proper authentication.
+
+    Args:
+        import_request: OpenAPI spec URL or content with optional config
+        request: FastAPI request object
+        db: Database session
+        user: Authenticated user
+
+    Returns:
+        OpenAPIImportResponse with created tools and any errors
+
+    Raises:
+        HTTPException: On parsing errors or if any tool conflicts
+    """
+    try:
+        user_email = get_user_email(user)
+        logger.info(f"User {user_email} importing tools from OpenAPI spec")
+
+        # Parse OpenAPI spec
+        spec = await parse_openapi_spec(import_request.url, import_request.content)
+
+        # Extract base URL from spec
+        base_url = extract_base_url(spec)
+
+        # Extract authentication config
+        auth_config = extract_security_config(spec)
+
+        # Convert OpenAPI operations to ToolCreate objects
+        tools_to_create = convert_openapi_to_tools(spec, base_url, auth_config, namespace=import_request.namespace)
+
+        logger.info(f"Parsed {len(tools_to_create)} tools from OpenAPI spec")
+
+        # Get team assignment
+        team_id = import_request.team_id
+
+        if not team_id:
+            # First-Party
+            from mcpgateway.services.team_management_service import TeamManagementService  # pylint: disable=import-outside-toplevel
+
+            team_service = TeamManagementService(db)
+            user_teams = await team_service.get_user_teams(user_email, include_personal=True)
+            personal_team = next((team for team in user_teams if team.is_personal), None)
+            team_id = personal_team.id if personal_team else None
+
+        # Extract metadata
+        metadata = MetadataCapture.extract_creation_metadata(request, user)
+
+        created_tools = []
+
+        # Register each tool (fail on first conflict per requirement 2.b)
+        for tool_create in tools_to_create:
+            try:
+                result = await tool_service.register_tool(
+                    db,
+                    tool_create,
+                    created_by=metadata["created_by"],
+                    created_from_ip=metadata["created_from_ip"],
+                    created_via="openapi_import",
+                    created_user_agent=metadata["created_user_agent"],
+                    team_id=team_id,
+                    owner_email=user_email,
+                    visibility=import_request.visibility,
+                )
+                created_tools.append({"name": result.name, "url": result.url, "method": result.request_type})
+                logger.debug(f"Registered tool from OpenAPI: {result.name}")
+
+            except ToolNameConflictError as e:
+                # Requirement 2.b: fail entire operation on conflict
+                # Rollback any created tools
+                db.rollback()
+                logger.error(f"Tool name conflict during OpenAPI import: {str(e)}")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Tool name conflict: {str(e)}. No tools were registered. Operation rolled back.")
+            except Exception as e:
+                # Fail fast on any error
+                db.rollback()
+                logger.error(f"Failed to register tool from OpenAPI: {str(e)}")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to register tool '{tool_create.name}': {str(e)}. Operation rolled back.")
+
+        return OpenAPIImportResponse(
+            success=True,
+            message=f"Successfully imported {len(created_tools)} tools from OpenAPI specification",
+            created_count=len(created_tools),
+            failed_count=0,
+            tools=created_tools,
+            errors=[],
+        )
+
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except ValueError as e:
+        logger.error(f"Validation error importing OpenAPI spec: {e}")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error importing OpenAPI spec: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to import OpenAPI spec: {str(e)}")
 
 
 @tool_router.get("/{tool_id}", response_model=Union[ToolRead, Dict])

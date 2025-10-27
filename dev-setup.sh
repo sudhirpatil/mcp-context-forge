@@ -1,5 +1,5 @@
 
-# Quick start with environment variables
+# Start McpGateway Service using uvx 
 BASIC_AUTH_PASSWORD=pass \
 MCPGATEWAY_UI_ENABLED=true \
 MCPGATEWAY_ADMIN_API_ENABLED=true \
@@ -8,6 +8,8 @@ PLATFORM_ADMIN_PASSWORD=changeme \
 PLATFORM_ADMIN_FULL_NAME="Platform Administrator" \
 uvx --from mcp-contextforge-gateway mcpgateway --host 0.0.0.0 --port 4444
 
+# McpGateway from source code
+cd /Users/sudhirpatil/code/mcp-context-forge && source ~/.venv/mcpgateway/bin/activate && MCPGATEWAY_UI_ENABLED=true MCPGATEWAY_ADMIN_API_ENABLED=true AUTH_REQUIRED=false uvicorn mcpgateway.main:app --host 0.0.0.0 --port 4444 --reload
 
 cd /Users/sudhirpatil/code/mcp-context-forge && make venv
 cd /Users/sudhirpatil/code/mcp-context-forge && make install-dev
@@ -16,6 +18,10 @@ cp -rp /Users/sudhirpatil/.venv/mcpgateway .venv
 source .venv/mcpgateway/bin/activate && pip install -e ".[dev]" 
 export MCPGATEWAY_BEARER_TOKEN=$(python3 -m mcpgateway.utils.create_jwt_token \
     --username admin@example.com --exp 10080 --secret my-test-key)
+
+# Or using the official mcp-server-git using uvx:
+pip install uv # to install uvx, if not already installed
+python3 -m mcpgateway.translate --stdio "uvx mcp-server-git" --expose-sse --port 9000
 
 # Register Serper search as mcp tool
 # Generate Authentication Token:
