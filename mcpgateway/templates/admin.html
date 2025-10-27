@@ -8,7 +8,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Context Forge - Gateway Administration</title>
+    <title>MCP Gateway - Administration</title>
 
     <!-- Security headers are set by middleware, not meta tags -->
     <!-- Favicon -->
@@ -109,25 +109,12 @@
             <h1
               class="text-3xl font-bold text-gray-800 dark:text-gray-200 leading-tight"
             >
-              Context Forge - Gateway Administration
+              MCP Gateway - Administration
             </h1>
             <p class="text-gray-600 dark:text-gray-400 mt-1 header-subtitle">
-              AI Gateway and Registry supporting MCP, A2A and REST
+              MCP Gateway and Registry supporting MCP, A2A, OpenAPI and REST
               <span class="mx-2 text-gray-400">|</span>
-              <a
-                href="https://ibm.github.io/mcp-context-forge/"
-                target="_blank"
-                class="text-indigo-600 dark:text-indigo-500 hover:underline"
-                >Docs</a
-              >
-              <span class="mx-2 text-gray-400">|</span>
-              <a
-                href="https://github.com/IBM/mcp-context-forge"
-                target="_blank"
-                class="text-indigo-600 dark:text-indigo-500 hover:underline"
-                >⭐ GitHub</a
-              >
-              <span class="mx-2 text-gray-400">|</span>
+              
               <button
                 @click="darkMode = !darkMode"
                 class="p-2 text-indigo-600 dark:text-indigo-500 hover:text-indigo-800 dark:hover:text-indigo-300"
@@ -2413,10 +2400,10 @@
             </svg>
             <div>
               <h3 class="text-lg font-bold text-purple-900 dark:text-purple-300">
-                🚀 Import Tools from OpenAPI Specification
+                🚀 Create Tools from OpenAPI Specification
               </h3>
               <p class="text-sm text-purple-700 dark:text-purple-400 mt-1">
-                Automatically create multiple REST API tools from an OpenAPI/Swagger spec in seconds
+                To create multiple MCP tool for each endpoint from OpenAPI/Swagger specification
               </p>
             </div>
           </div>
@@ -2599,7 +2586,7 @@
               </div>
               <div class="ml-3">
                 <p class="text-sm text-blue-700 dark:text-blue-300">
-                  <strong>Quick Tip:</strong> This will automatically create a tool for each endpoint in your OpenAPI spec.
+                  <strong>Quick Tip:</strong> 
                   Use a namespace to avoid conflicts. If any tool name already exists, the entire import will fail and roll back.
                 </p>
               </div>
