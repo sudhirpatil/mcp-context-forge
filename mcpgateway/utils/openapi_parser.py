@@ -63,30 +63,51 @@ async def parse_openapi_spec(url: Optional[str] = None, content: Optional[str] =
     try:
         if url:
             logger.info(f"Fetching OpenAPI spec from URL: {url}")
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-                spec_content = response.text
+            try:
+                async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    spec_content = response.text
+                    logger.info(f"Fetched {len(spec_content)} bytes from {url}")
+            except httpx.TimeoutException as e:
+                raise ValueError(f"Timeout fetching OpenAPI spec from {url}. The server took too long to respond (>30s). Error: {str(e)}")
+            except httpx.HTTPStatusError as e:
+                raise ValueError(f"HTTP error fetching OpenAPI spec from {url}: {e.response.status_code} {e.response.reason_phrase}. The URL may be incorrect or the server is having issues.")
+            except httpx.ConnectError as e:
+                raise ValueError(f"Connection error fetching OpenAPI spec from {url}. Cannot connect to the server. Error: {str(e)}")
+            except httpx.HTTPError as e:
+                raise ValueError(f"Network error fetching OpenAPI spec from {url}: {str(e)}")
         else:
             spec_content = content
+            logger.info(f"Parsing OpenAPI spec from direct content ({len(spec_content)} bytes)")
 
         # Parse YAML
-        spec = yaml.safe_load(spec_content)
+        try:
+            spec = yaml.safe_load(spec_content)
+        except yaml.YAMLError as e:
+            # Get line number if available
+            if hasattr(e, "problem_mark"):
+                mark = e.problem_mark
+                raise ValueError(f"Failed to parse YAML at line {mark.line + 1}, column {mark.column + 1}: {e.problem}. Please check your YAML syntax.")
+            else:
+                raise ValueError(f"Failed to parse YAML: {str(e)}. The content is not valid YAML format.")
 
         # Validate it's a valid OpenAPI spec
         if not isinstance(spec, dict):
-            raise ValueError("Invalid OpenAPI spec: root must be an object")
+            raise ValueError("Invalid OpenAPI spec: root must be an object/dictionary, not a string or list")
 
         if "openapi" not in spec and "swagger" not in spec:
-            raise ValueError("Invalid OpenAPI spec: missing 'openapi' or 'swagger' version field")
+            raise ValueError("Invalid OpenAPI spec: missing 'openapi' or 'swagger' version field. This doesn't appear to be a valid OpenAPI/Swagger specification.")
 
-        logger.info(f"Successfully parsed OpenAPI spec: {spec.get('info', {}).get('title', 'Unknown')}")
+        openapi_version = spec.get("openapi") or spec.get("swagger")
+        logger.info(f"Successfully parsed OpenAPI spec v{openapi_version}: {spec.get('info', {}).get('title', 'Unknown')}")
         return spec
 
-    except yaml.YAMLError as e:
-        raise ValueError(f"Failed to parse YAML: {str(e)}")
-    except httpx.HTTPError as e:
-        raise ValueError(f"Failed to fetch OpenAPI spec from URL: {str(e)}")
+    except ValueError:
+        raise  # Re-raise ValueError with detailed message
+    except Exception as e:
+        logger.exception(f"Unexpected error parsing OpenAPI spec: {e}")
+        raise ValueError(f"Unexpected error parsing OpenAPI specification: {type(e).__name__}: {str(e)}")
 
 
 def extract_base_url(spec: dict) -> str:

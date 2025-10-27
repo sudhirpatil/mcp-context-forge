@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OpenAPI Import UI Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .section { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        button { background: #6366f1; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #4f46e5; }
+        .success { background: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin: 10px 0; }
+        .error { background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 10px 0; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px; }
+        label { font-weight: bold; display: block; margin-top: 10px; }
+        pre { background: #1e1e1e; color: #fff; padding: 15px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>OpenAPI Import UI - Standalone Test</h1>
+    
+    <div class="section">
+        <h2>Test OpenAPI Import Endpoint</h2>
+        <p>This page tests the OpenAPI import functionality independently.</p>
+        
+        <label>Gateway Base URL:</label>
+        <input type="text" id="baseUrl" value="http://localhost:4444" />
+        
+        <label>OpenAPI Spec URL:</label>
+        <input type="text" id="specUrl" value="https://petstore3.swagger.io/api/v3/openapi.yaml" />
+        
+        <label>Namespace:</label>
+        <input type="text" id="namespace" value="petstore" />
+        
+        <label>Visibility:</label>
+        <select id="visibility">
+            <option value="public">Public</option>
+            <option value="team">Team</option>
+            <option value="private">Private</option>
+        </select>
+        
+        <br/><br/>
+        <button onclick="testImport()">Test Import</button>
+        <button onclick="clearResults()">Clear</button>
+    </div>
+    
+    <div id="result" class="section" style="display: none;">
+        <h3>Result:</h3>
+        <div id="resultContent"></div>
+    </div>
+    
+    <div class="section">
+        <h3>Console Log:</h3>
+        <pre id="console"></pre>
+    </div>
+
+    <script>
+        let logs = [];
+        
+        function log(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            logs.push(logEntry);
+            if (data) {
+                logs.push(JSON.stringify(data, null, 2));
+            }
+            document.getElementById('console').textContent = logs.join('\n');
+            console.log(message, data);
+        }
+        
+        function clearResults() {
+            document.getElementById('result').style.display = 'none';
+            logs = [];
+            document.getElementById('console').textContent = '';
+        }
+        
+        async function testImport() {
+            clearResults();
+            
+            const baseUrl = document.getElementById('baseUrl').value;
+            const specUrl = document.getElementById('specUrl').value;
+            const namespace = document.getElementById('namespace').value;
+            const visibility = document.getElementById('visibility').value;
+            
+            log("Starting OpenAPI import test");
+            log("Base URL:", baseUrl);
+            log("Spec URL:", specUrl);
+            log("Namespace:", namespace);
+            
+            const requestBody = {
+                url: specUrl,
+                namespace: namespace || null,
+                visibility: visibility
+            };
+            
+            log("Request body:", requestBody);
+            
+            try {
+                const apiUrl = `${baseUrl}/tools/openapi`;
+                log("Calling API:", apiUrl);
+                
+                const response = await fetch(apiUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    credentials: "same-origin",
+                    body: JSON.stringify(requestBody)
+                });
+                
+                log("Response status:", response.status);
+                log("Response headers:", Object.fromEntries(response.headers.entries()));
+                
+                const result = await response.json();
+                log("Response data:", result);
+                
+                const resultDiv = document.getElementById('result');
+                const resultContent = document.getElementById('resultContent');
+                
+                resultDiv.style.display = 'block';
+                
+                if (response.ok && result.success) {
+                    resultContent.className = 'success';
+                    resultContent.innerHTML = `
+                        <h4>✅ Success!</h4>
+                        <p><strong>Imported ${result.created_count} tools</strong></p>
+                        ${result.tools && result.tools.length > 0 ? `
+                        <p>Tools created:</p>
+                        <ul>
+                            ${result.tools.slice(0, 10).map(t => `<li>${t.name} (${t.method}) - ${t.url}</li>`).join('')}
+                            ${result.tools.length > 10 ? `<li>... and ${result.tools.length - 10} more</li>` : ''}
+                        </ul>
+                        ` : ''}
+                    `;
+                    log("SUCCESS! Imported", result.created_count, "tools");
+                } else {
+                    resultContent.className = 'error';
+                    resultContent.innerHTML = `
+                        <h4>❌ Failed</h4>
+                        <p><strong>Error:</strong> ${result.detail || result.message || 'Unknown error'}</p>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                    `;
+                    log("FAILED with status:", response.status);
+                }
+                
+            } catch (error) {
+                log("ERROR:", error.message);
+                log("Stack trace:", error.stack);
+                
+                const resultDiv = document.getElementById('result');
+                const resultContent = document.getElementById('resultContent');
+                resultDiv.style.display = 'block';
+                resultContent.className = 'error';
+                resultContent.innerHTML = `
+                    <h4>❌ Exception</h4>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p>Check console log above for details.</p>
+                `;
+            }
+        }
+        
+        // Auto-run test on page load (optional)
+        // window.onload = () => { log("Page loaded. Ready to test."); };
+    </script>
+</body>
+</html>
+

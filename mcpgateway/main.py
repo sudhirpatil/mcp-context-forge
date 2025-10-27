@@ -2240,6 +2240,8 @@ async def create_tool(
 async def import_tools_from_openapi(
     import_request: OpenAPIImportRequest,
     request: Request,
+    # team_id: Optional[str] = Body(None, description="Team ID to assign resource to"),
+    # visibility: Optional[str] = Body("public", description="Resource visibility: private, team, public"),
     db: Session = Depends(get_db),
     user=Depends(get_current_user_with_permissions),
 ) -> OpenAPIImportResponse:
@@ -2265,20 +2267,64 @@ async def import_tools_from_openapi(
         user_email = get_user_email(user)
         logger.info(f"User {user_email} importing tools from OpenAPI spec")
 
-        # Parse OpenAPI spec
-        spec = await parse_openapi_spec(import_request.url, import_request.content)
+        # Parse OpenAPI spec with detailed error handling
+        try:
+            spec = await parse_openapi_spec(import_request.url, import_request.content)
+            logger.info(f"Successfully parsed OpenAPI spec: {spec.get('info', {}).get('title', 'Unknown')}")
+        except ValueError as e:
+            error_msg = str(e)
+            logger.error(f"Failed to parse OpenAPI spec: {error_msg}")
+            if "Failed to fetch" in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Failed to fetch OpenAPI spec from URL. Error: {error_msg}. Please verify the URL is accessible and returns valid YAML.",
+                )
+            elif "Failed to parse YAML" in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid YAML format: {error_msg}. Please check your OpenAPI specification syntax."
+                )
+            else:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"OpenAPI parsing error: {error_msg}")
+        except Exception as e:
+            logger.exception(f"Unexpected error parsing OpenAPI spec: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error parsing OpenAPI spec: {str(e)}. Check server logs for details."
+            )
 
-        # Extract base URL from spec
-        base_url = extract_base_url(spec)
+        # Extract base URL from spec with error handling
+        try:
+            base_url = extract_base_url(spec)
+            logger.info(f"Extracted base URL: {base_url}")
+        except ValueError as e:
+            logger.error(f"Failed to extract base URL: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid OpenAPI spec: {str(e)}. Make sure your spec has a 'servers' array with at least one URL.",
+            )
 
         # Extract authentication config
-        auth_config = extract_security_config(spec)
+        try:
+            auth_config = extract_security_config(spec)
+            if auth_config.get("auth_type"):
+                logger.info(f"Detected authentication type: {auth_config.get('auth_type')}")
+        except Exception as e:
+            logger.warning(f"Failed to extract security config (continuing without auth): {e}")
+            auth_config = {"auth_type": None}
 
         # Convert OpenAPI operations to ToolCreate objects
-        tools_to_create = convert_openapi_to_tools(spec, base_url, auth_config, namespace=import_request.namespace)
+        try:
+            tools_to_create = convert_openapi_to_tools(spec, base_url, auth_config, namespace=import_request.namespace)
+            logger.info(f"Parsed {len(tools_to_create)} tools from OpenAPI spec")
+        except ValueError as e:
+            logger.error(f"Failed to convert OpenAPI to tools: {e}")
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Failed to convert OpenAPI spec to tools: {str(e)}")
 
-        logger.info(f"Parsed {len(tools_to_create)} tools from OpenAPI spec")
-
+        if len(tools_to_create) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="No valid endpoints found in OpenAPI specification. The spec may be empty or contain only unsupported operations.",
+            )
+        
         # Get team assignment
         team_id = import_request.team_id
 
@@ -2297,7 +2343,7 @@ async def import_tools_from_openapi(
         created_tools = []
 
         # Register each tool (fail on first conflict per requirement 2.b)
-        for tool_create in tools_to_create:
+        for i, tool_create in enumerate(tools_to_create):
             try:
                 result = await tool_service.register_tool(
                     db,
@@ -2317,13 +2363,30 @@ async def import_tools_from_openapi(
                 # Requirement 2.b: fail entire operation on conflict
                 # Rollback any created tools
                 db.rollback()
-                logger.error(f"Tool name conflict during OpenAPI import: {str(e)}")
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Tool name conflict: {str(e)}. No tools were registered. Operation rolled back.")
+                conflict_msg = f"Tool name conflict on tool #{i + 1} ('{tool_create.name}'): {str(e)}"
+                logger.error(f"OpenAPI import failed: {conflict_msg}")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"{conflict_msg}. Already imported {len(created_tools)} tools but rolled back entire operation. Suggestion: Use a different namespace or delete conflicting tools first.",
+                )
+            except ValidationError as e:
+                # Validation error on tool creation
+                db.rollback()
+                validation_msg = f"Validation error on tool #{i + 1} ('{tool_create.name}'): {ErrorFormatter.format_validation_error(e)}"
+                logger.error(f"OpenAPI import failed: {validation_msg}")
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{validation_msg}. Operation rolled back.")
+            except IntegrityError as e:
+                # Database integrity error
+                db.rollback()
+                db_msg = f"Database error on tool #{i + 1} ('{tool_create.name}'): {ErrorFormatter.format_database_error(e)}"
+                logger.error(f"OpenAPI import failed: {db_msg}")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"{db_msg}. Operation rolled back.")
             except Exception as e:
                 # Fail fast on any error
                 db.rollback()
-                logger.error(f"Failed to register tool from OpenAPI: {str(e)}")
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to register tool '{tool_create.name}': {str(e)}. Operation rolled back.")
+                error_msg = f"Failed to register tool #{i + 1} ('{tool_create.name}'): {str(e)}"
+                logger.exception(f"OpenAPI import failed: {error_msg}")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{error_msg}. Operation rolled back. Check server logs for full details.")
 
         return OpenAPIImportResponse(
             success=True,
@@ -2335,13 +2398,35 @@ async def import_tools_from_openapi(
         )
 
     except HTTPException:
-        raise  # Re-raise HTTP exceptions
+        raise  # Re-raise HTTP exceptions (already have detailed messages)
     except ValueError as e:
-        logger.error(f"Validation error importing OpenAPI spec: {e}")
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        error_msg = f"Validation error: {str(e)}"
+        logger.error(f"OpenAPI import validation error: {error_msg}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{error_msg}. Please check your OpenAPI specification format and ensure all required fields are present."
+        )
+    except ToolNameConflictError as e:
+        # Catch any conflicts not caught in the loop
+        db.rollback()
+        logger.error(f"Tool name conflict during OpenAPI import: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Tool name conflict: {str(e)}. No tools were registered. Try using a different namespace or delete existing tools.",
+        )
     except Exception as e:
-        logger.error(f"Error importing OpenAPI spec: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to import OpenAPI spec: {str(e)}")
+        # Catch-all for unexpected errors
+        logger.exception(f"Unexpected error during OpenAPI import: {e}")
+        import traceback
+
+        error_details = {
+            "error_type": type(e).__name__,
+            "error_message": str(e),
+            "traceback_summary": traceback.format_exc().split("\n")[-3:-1],  # Last 2 lines
+        }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error during OpenAPI import: {error_details['error_type']}: {error_details['error_message']}. Check server logs for full traceback.",
+        )
 
 
 @tool_router.get("/{tool_id}", response_model=Union[ToolRead, Dict])

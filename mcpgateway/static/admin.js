@@ -8312,6 +8312,177 @@ async function handleToolFormSubmit(event) {
         showErrorMessage(error.message);
     }
 }
+
+// Handle OpenAPI Import Form Submit
+async function handleOpenAPIImportFormSubmit(event) {
+    event.preventDefault();
+    
+    console.log("OpenAPI import form submitted");
+
+    const form = event.target;
+    const formData = new FormData(form);
+    const statusEl = safeGetElement("openapi-import-status");
+    const loadingEl = safeGetElement("openapi-import-loading");
+
+    try {
+        // Show loading
+        if (loadingEl) {
+            loadingEl.classList.remove("hidden");
+        }
+        if (statusEl) {
+            statusEl.classList.add("hidden");
+            statusEl.textContent = "";
+        }
+
+        // Build request body
+        const inputMode = formData.get("openapi_input_mode");
+        const requestBody = {
+            namespace: formData.get("namespace") || null,
+            visibility: formData.get("visibility") || "public",
+        };
+
+        if (inputMode === "url") {
+            const url = formData.get("url");
+            if (!url || url.trim() === "") {
+                throw new Error("URL is required when using URL mode");
+            }
+            requestBody.url = url.trim();
+        } else {
+            const content = formData.get("content");
+            if (!content || content.trim() === "") {
+                throw new Error("YAML content is required when using content mode");
+            }
+            requestBody.content = content.trim();
+        }
+
+        // Add team_id if present
+        const teamId = new URL(window.location.href).searchParams.get("team_id");
+        if (teamId) {
+            requestBody.team_id = teamId;
+        }
+
+        console.log("Importing OpenAPI spec with payload:", requestBody);
+        
+        // Determine the correct endpoint path
+        const rootPath = window.ROOT_PATH || "";
+        const apiUrl = `${rootPath}/tools/openapi`;
+        console.log("Calling API:", apiUrl);
+
+        // Call API endpoint (cookies handle authentication in UI)
+        const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            credentials: "same-origin",  // Include cookies for auth
+            body: JSON.stringify(requestBody),
+        });
+
+        console.log("API response status:", response.status);
+        
+        const result = await response.json();
+        console.log("API response data:", result);
+
+        if (response.ok && result.success) {
+            // Success - show results
+            console.log("Import successful!",result);
+            if (statusEl) {
+                statusEl.classList.remove("hidden");
+                statusEl.className = "mt-4 p-4 bg-green-50 dark:bg-green-900 dark:bg-opacity-20 border-l-4 border-green-400 text-green-700 dark:text-green-300";
+                statusEl.innerHTML = `
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium">Success!</h3>
+                            <div class="mt-2 text-sm">
+                                <p><strong>Imported ${result.created_count} tools successfully!</strong></p>
+                                ${result.tools && result.tools.length > 0 ? `
+                                <p class="mt-2">Tools created:</p>
+                                <ul class="list-disc list-inside mt-1">
+                                    ${result.tools.slice(0, 5).map(t => `<li>${t.name} (${t.method})</li>`).join('')}
+                                    ${result.tools.length > 5 ? `<li>... and ${result.tools.length - 5} more</li>` : ''}
+                                </ul>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Reset form
+            form.reset();
+
+            // Reload tools list after 2 seconds
+            setTimeout(() => {
+                const searchParams = new URLSearchParams();
+                if (teamId) {
+                    searchParams.set("team_id", teamId);
+                }
+                const queryString = searchParams.toString();
+                const rootPath = window.ROOT_PATH || "";
+                const redirectUrl = `${rootPath}/admin${queryString ? `?${queryString}` : ""}#tools`;
+                console.log("Redirecting to:", redirectUrl);
+                window.location.href = redirectUrl;
+            }, 2000);
+        } else {
+            console.error("Import failed. Response:", response.status, result);
+            throw new Error(result.detail || result.message || `Import failed with status ${response.status}`);
+        }
+    } catch (error) {
+        console.error("OpenAPI import error:", error);
+
+        if (statusEl) {
+            statusEl.classList.remove("hidden");
+            statusEl.className = "mt-4 p-4 bg-red-50 dark:bg-red-900 dark:bg-opacity-20 border-l-4 border-red-400 text-red-700 dark:text-red-300";
+            statusEl.innerHTML = `
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium">Import Failed</h3>
+                        <div class="mt-2 text-sm">
+                            <p>${error.message || 'Unknown error occurred'}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    } finally {
+        if (loadingEl) {
+            loadingEl.classList.add("hidden");
+        }
+    }
+}
+
+// Toggle between URL and Content input modes for OpenAPI import
+function toggleOpenAPIInputMode() {
+    const mode = document.querySelector('input[name="openapi_input_mode"]:checked');
+    if (!mode) return;
+
+    const urlField = safeGetElement("openapi-url-field");
+    const contentField = safeGetElement("openapi-content-field");
+    const urlInput = safeGetElement("openapi-url-input");
+    const contentInput = safeGetElement("openapi-content-input");
+
+    if (mode.value === "url") {
+        if (urlField) urlField.style.display = "block";
+        if (contentField) contentField.style.display = "none";
+        if (urlInput) urlInput.required = true;
+        if (contentInput) contentInput.required = false;
+    } else {
+        if (urlField) urlField.style.display = "none";
+        if (contentField) contentField.style.display = "block";
+        if (urlInput) urlInput.required = false;
+        if (contentInput) contentInput.required = true;
+    }
+}
 async function handleEditToolFormSubmit(event) {
     event.preventDefault();
 
@@ -9200,6 +9371,14 @@ function setupFormHandlers() {
                 refreshEditors();
             }
         });
+    }
+
+    const openapiForm = safeGetElement("openapi-import-form");
+    if (openapiForm) {
+        console.log("Registering OpenAPI import form handler");
+        openapiForm.addEventListener("submit", handleOpenAPIImportFormSubmit);
+    } else {
+        console.warn("OpenAPI import form not found in DOM");
     }
 
     const paramButton = safeGetElement("add-parameter-btn");

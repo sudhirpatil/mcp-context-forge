@@ -2404,6 +2404,209 @@
             {% include 'pagination_controls.html' %}
           </div>
         </div>
+
+        <!-- OpenAPI Import Section -->
+        <div class="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-gray-800 dark:to-gray-800 shadow rounded-lg p-6 border-2 border-purple-200 dark:border-purple-900 mb-6">
+          <div class="flex items-start mb-4">
+            <svg class="w-8 h-8 text-purple-600 dark:text-purple-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+            </svg>
+            <div>
+              <h3 class="text-lg font-bold text-purple-900 dark:text-purple-300">
+                🚀 Import Tools from OpenAPI Specification
+              </h3>
+              <p class="text-sm text-purple-700 dark:text-purple-400 mt-1">
+                Automatically create multiple REST API tools from an OpenAPI/Swagger spec in seconds
+              </p>
+            </div>
+          </div>
+
+          <form id="openapi-import-form" class="space-y-4">
+            <!-- Input Mode Selector -->
+            <div class="bg-white dark:bg-gray-900 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Import Source
+              </label>
+              <div class="flex gap-6">
+                <div class="flex items-center">
+                  <input
+                    type="radio"
+                    id="openapi-input-url"
+                    name="openapi_input_mode"
+                    value="url"
+                    checked
+                    onchange="toggleOpenAPIInputMode()"
+                    class="form-radio h-4 w-4 text-purple-600 dark:bg-gray-800 dark:border-gray-600"
+                  />
+                  <label for="openapi-input-url" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    🌐 From URL
+                  </label>
+                </div>
+                <div class="flex items-center">
+                  <input
+                    type="radio"
+                    id="openapi-input-content"
+                    name="openapi_input_mode"
+                    value="content"
+                    onchange="toggleOpenAPIInputMode()"
+                    class="form-radio h-4 w-4 text-purple-600 dark:bg-gray-800 dark:border-gray-600"
+                  />
+                  <label for="openapi-input-content" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    📝 Direct YAML
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- URL Input Field -->
+            <div id="openapi-url-field">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                OpenAPI Spec URL
+              </label>
+              <input
+                type="url"
+                name="url"
+                id="openapi-url-input"
+                placeholder="https://petstore3.swagger.io/api/v3/openapi.yaml"
+                required
+                class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:bg-gray-900 dark:text-gray-300"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Example: https://petstore3.swagger.io/api/v3/openapi.yaml
+              </p>
+            </div>
+
+            <!-- YAML Content Field -->
+            <div id="openapi-content-field" style="display: none;">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                OpenAPI YAML Content
+              </label>
+              <textarea
+                name="content"
+                id="openapi-content-input"
+                rows="10"
+                placeholder="openapi: 3.0.0&#10;info:&#10;  title: My API&#10;  version: 1.0.0&#10;servers:&#10;  - url: https://api.example.com&#10;paths:&#10;  /users:&#10;    get:&#10;      operationId: getUsers"
+                class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:bg-gray-900 dark:text-gray-300 font-mono text-sm"
+              ></textarea>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Paste your OpenAPI YAML specification here
+              </p>
+            </div>
+
+            <!-- Namespace Field -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Namespace (Recommended)
+              </label>
+              <input
+                type="text"
+                name="namespace"
+                id="openapi-namespace-input"
+                placeholder="petstore"
+                class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:bg-gray-900 dark:text-gray-300"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Prefix for all imported tool names (e.g., "petstore_getPetById"). Prevents naming conflicts.
+              </p>
+            </div>
+
+            <!-- Visibility Selector -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-3">
+                Visibility
+              </label>
+              <div class="flex gap-6">
+                <div class="flex items-center">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="public"
+                    checked
+                    class="form-radio h-4 w-4 text-purple-600 dark:bg-gray-800 dark:border-gray-600"
+                    id="openapi-visibility-public"
+                  />
+                  <label for="openapi-visibility-public" class="ml-2 text-sm text-gray-700 dark:text-gray-400">
+                    🌍 Public
+                  </label>
+                </div>
+                <div class="flex items-center">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="team"
+                    class="form-radio h-4 w-4 text-purple-600 dark:bg-gray-800 dark:border-gray-600"
+                    id="openapi-visibility-team"
+                  />
+                  <label for="openapi-visibility-team" class="ml-2 text-sm text-gray-700 dark:text-gray-400">
+                    👥 Team
+                  </label>
+                </div>
+                <div class="flex items-center">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="private"
+                    class="form-radio h-4 w-4 text-purple-600 dark:bg-gray-800 dark:border-gray-600"
+                    id="openapi-visibility-private"
+                  />
+                  <label for="openapi-visibility-private" class="ml-2 text-sm text-gray-700 dark:text-gray-400">
+                    🔒 Private
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="flex items-center gap-4">
+              <button
+                type="submit"
+                class="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                </svg>
+                Import Tools from OpenAPI
+              </button>
+              <button
+                type="reset"
+                class="inline-flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+              >
+                Clear
+              </button>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="openapi-import-loading" class="hidden">
+              <div class="flex items-center text-purple-600 dark:text-purple-400">
+                <svg class="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="font-medium">Importing tools from OpenAPI specification...</span>
+              </div>
+            </div>
+
+            <div id="openapi-import-status" class="hidden"></div>
+          </form>
+
+          <!-- Help Text -->
+          <div class="mt-6 bg-blue-50 dark:bg-blue-900 dark:bg-opacity-20 border-l-4 border-blue-400 p-4">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                </svg>
+              </div>
+              <div class="ml-3">
+                <p class="text-sm text-blue-700 dark:text-blue-300">
+                  <strong>Quick Tip:</strong> This will automatically create a tool for each endpoint in your OpenAPI spec.
+                  Use a namespace to avoid conflicts. If any tool name already exists, the entire import will fail and roll back.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="bg-white shadow rounded-lg p-6 dark:bg-gray-800">
           <div class="flex justify-between items-center mb-4">
             <div>
