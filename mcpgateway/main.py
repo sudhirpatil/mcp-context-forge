@@ -2240,8 +2240,6 @@ async def create_tool(
 async def import_tools_from_openapi(
     import_request: OpenAPIImportRequest,
     request: Request,
-    # team_id: Optional[str] = Body(None, description="Team ID to assign resource to"),
-    # visibility: Optional[str] = Body("public", description="Resource visibility: private, team, public"),
     db: Session = Depends(get_db),
     user=Depends(get_current_user_with_permissions),
 ) -> OpenAPIImportResponse:

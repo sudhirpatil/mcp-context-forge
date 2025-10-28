@@ -16,14 +16,14 @@ make dev
 
 # 2. In another terminal - generate token
 export TOKEN=$(python3 -m mcpgateway.utils.create_jwt_token \
-  --username admin@example.com --exp 60 --secret my-test-key 2>/dev/null | head -1)
+  --username admin@example.com --exp 6000 --secret my-test-key 2>/dev/null | head -1)
 
 # 3. Import Petstore API (18 tools in one command!)
 curl -X POST http://localhost:4444/tools/openapi \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://petstore3.swagger.io/api/v3/openapi.yaml",
+    "url": "https://gist.githubusercontent.com/vblagoje/329133812934de3b5b12b888cd279f73/raw/6f11aeee04fa9a73c7e0f19c00d312ea1f682c54/gistfile1.yml",
     "namespace": "petstore"
   }' | jq '.'
 
