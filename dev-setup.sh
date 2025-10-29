@@ -12,11 +12,16 @@ uvx --from mcp-contextforge-gateway mcpgateway --host 0.0.0.0 --port 4444
 cd /Users/sudhirpatil/code/mcp-context-forge && source ~/.venv/mcpgateway/bin/activate && MCPGATEWAY_UI_ENABLED=true MCPGATEWAY_ADMIN_API_ENABLED=true AUTH_REQUIRED=false uvicorn mcpgateway.main:app --host 0.0.0.0 --port 4444 --reload
 cd /Users/sudhirpatil/code/mcp-context-forge && source ~/.venv/mcpgateway/bin/activate && MCPGATEWAY_UI_ENABLED=true MCPGATEWAY_ADMIN_API_ENABLED=true AUTH_REQUIRED=false PLUGINS_ENABLED=true uvicorn mcpgateway.main:app --host 0.0.0.0 --port 4444 --reload 2>&1 | tee -a gateway.log &
 
+
 cd /Users/sudhirpatil/code/mcp-context-forge && make venv
 cd /Users/sudhirpatil/code/mcp-context-forge && make install-dev
 cd /Users/sudhirpatil/code/mcp-context-forge && source /Users/sudhirpatil/.venv/mcpgateway/bin/activate && python -m pip install --upgrade pip setuptools wheel
 cp -rp /Users/sudhirpatil/.venv/mcpgateway .venv 
 source .venv/mcpgateway/bin/activate && pip install -e ".[dev]" 
+
+#Start McpGateway Service without uv
+cd /Users/sudhirpatil/code/mcp-context-forge && source ~/.venv/mcpgateway/bin/activate && MCPGATEWAY_UI_ENABLED=true MCPGATEWAY_ADMIN_API_ENABLED=true AUTH_REQUIRED=false PLUGINS_ENABLED=true mcpgateway --host 0.0.0.0 --port 4444 --reload 2>&1 | tee -a gateway.log &
+
 export MCPGATEWAY_BEARER_TOKEN=$(python3 -m mcpgateway.utils.create_jwt_token \
     --username admin@example.com --exp 10080 --secret my-test-key)
 

@@ -85,7 +85,7 @@ app is mounted behind a proxy.
   ```
 
 ### Colors & Tailwind
-- Tailwind is initialised in `admin.html` via `https://cdn.tailwindcss.com` with
+- Tailwind is served locally from `/static/tailwindcss-cdn.js` in `admin.html` with
   `darkMode: "class"`.
 
 - Add a custom config block to extend colours/fonts and swap utility classes, for example:

@@ -114,7 +114,8 @@ def test_csp_header_structure():
 
     # Check that required CDN domains are allowed for Admin UI
     assert "https://cdnjs.cloudflare.com" in csp
-    assert "https://cdn.tailwindcss.com" in csp
+    # Tailwind CSS is now served locally from /static/tailwindcss-cdn.js
+    # assert "https://cdn.tailwindcss.com" in csp  # Removed CDN reference
     assert "https://cdn.jsdelivr.net" in csp
 
     # Verify CSP ends with semicolon
